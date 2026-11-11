@@ -287,6 +287,10 @@ impl Orchestrator {
     /// created after release.
     pub async fn create_releases(&self, target: Option<String>) -> Result<()> {
         let mut auto_start_packages: Vec<String> = vec![];
+        // Packages that share a release PR (separate_pull_requests = false)
+        // all find it by its pending label, so it is relabelled only once
+        // every package has been released.
+        let mut released_prs: Vec<u64> = vec![];
         let base_branch = self.config.base_branch.clone();
 
         self.validate_target(target.as_deref())?;
@@ -308,12 +312,9 @@ impl Orchestrator {
             {
                 self.create_package_release(package, &merged_pr).await?;
 
-                let req = PrLabelsRequest {
-                    pr_number: merged_pr.number,
-                    labels: vec![TAGGED_LABEL.into()],
-                };
-
-                self.forge.replace_pr_labels(req).await?;
+                if !released_prs.contains(&merged_pr.number) {
+                    released_prs.push(merged_pr.number);
+                }
 
                 if package
                     .versioning_config
@@ -323,6 +324,15 @@ impl Orchestrator {
                     auto_start_packages.push(name.clone());
                 };
             }
+        }
+
+        for pr_number in released_prs {
+            self.forge
+                .replace_pr_labels(PrLabelsRequest {
+                    pr_number,
+                    labels: vec![TAGGED_LABEL.into()],
+                })
+                .await?;
         }
 
         if !auto_start_packages.is_empty() {

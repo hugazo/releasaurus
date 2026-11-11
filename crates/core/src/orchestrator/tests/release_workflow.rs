@@ -160,6 +160,83 @@ async fn create_releases_handles_separate_pull_requests() {
 }
 
 #[tokio::test]
+async fn create_releases_tags_every_package_of_a_shared_pr_before_relabelling_it()
+ {
+    let pr_body = format!(
+        "{}{}",
+        make_pr_body(&PrBodyInput {
+            pkg: "pkg-a",
+            tag: "pkg-a-v1.0.0",
+            notes: "Release A",
+            tag_link: "tag-link-a",
+            sha_link: "sha-link-a",
+            header: "",
+            footer: "",
+        }),
+        make_pr_body(&PrBodyInput {
+            pkg: "pkg-b",
+            tag: "pkg-b-v2.0.0",
+            notes: "Release B",
+            tag_link: "tag-link-b",
+            sha_link: "sha-link-b",
+            header: "",
+            footer: "",
+        }),
+    );
+
+    let mut mock_forge = MockForge::new();
+
+    // The shared PR keeps its pending label, so both packages find it.
+    mock_forge
+        .expect_get_merged_release_pr()
+        .times(2)
+        .returning(move |_| {
+            Ok(Some(PullRequest {
+                number: 123,
+                sha: "merge-sha".to_string(),
+                body: pr_body.clone(),
+            }))
+        });
+
+    mock_forge.expect_get_tag().returning(|_| Ok(None));
+
+    mock_forge
+        .expect_tag_commit()
+        .times(2)
+        .returning(|_, _| Ok(()));
+    mock_forge
+        .expect_create_release()
+        .times(2)
+        .returning(|_| Ok(()));
+    mock_forge
+        .expect_replace_pr_labels()
+        .times(1)
+        .withf(|req| req.pr_number == 123)
+        .returning(|_| Ok(()));
+
+    let orchestrator = create_test_orchestrator_with_config(
+        mock_forge,
+        vec![
+            PackageConfigBuilder::default()
+                .name("pkg-a")
+                .path("packages/pkg-a")
+                .tag_prefix("pkg-a-v")
+                .build()
+                .unwrap(),
+            PackageConfigBuilder::default()
+                .name("pkg-b")
+                .path("packages/pkg-b")
+                .tag_prefix("pkg-b-v")
+                .build()
+                .unwrap(),
+        ],
+        None,
+    );
+
+    orchestrator.create_releases(None).await.unwrap();
+}
+
+#[tokio::test]
 async fn create_releases_targets_specific_package() {
     let pr_body_a = make_pr_body(&PrBodyInput {
         pkg: "pkg-a",
