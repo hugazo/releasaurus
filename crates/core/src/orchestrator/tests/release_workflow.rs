@@ -186,10 +186,11 @@ async fn create_releases_tags_every_package_of_a_shared_pr_before_relabelling_it
 
     let mut mock_forge = MockForge::new();
 
-    // The shared PR keeps its pending label, so both packages find it.
+    // The shared PR keeps its pending label, so every package finds it,
+    // pkg-c too, which it doesn't bump.
     mock_forge
         .expect_get_merged_release_pr()
-        .times(2)
+        .times(3)
         .returning(move |_| {
             Ok(Some(PullRequest {
                 number: 123,
@@ -227,6 +228,12 @@ async fn create_releases_tags_every_package_of_a_shared_pr_before_relabelling_it
                 .name("pkg-b")
                 .path("packages/pkg-b")
                 .tag_prefix("pkg-b-v")
+                .build()
+                .unwrap(),
+            PackageConfigBuilder::default()
+                .name("pkg-c")
+                .path("packages/pkg-c")
+                .tag_prefix("pkg-c-v")
                 .build()
                 .unwrap(),
         ],

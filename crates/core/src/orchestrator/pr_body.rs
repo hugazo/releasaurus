@@ -63,6 +63,17 @@ pub fn extract_preserved_header_footer(
     (header, footer)
 }
 
+/// Whether a merged release PR's body has a section for `package_name`;
+/// a release PR shared by several packages has one only for those it bumps.
+pub fn pr_body_has_package(package_name: &str, body: &str) -> bool {
+    tl::parse(body, tl::ParserOptions::default())
+        .map(|dom| {
+            dom.get_element_by_id(normalize_html_id(package_name).as_bytes())
+                .is_some()
+        })
+        .unwrap_or(false)
+}
+
 pub fn parse_pr_body(
     package_name: &str,
     pr_number: u64,
@@ -269,6 +280,17 @@ mod tests {
     }
 
     // parse_pr_body
+
+    #[test]
+    fn pr_body_has_package_finds_only_bumped_packages() {
+        let body = r#"<details><summary>pkg-a-v1.0.0</summary>
+<div id="pkg-a-header"></div>
+<div id="pkg-a" data-tag="pkg-a-v1.0.0">notes</div>
+<div id="pkg-a-footer"></div>
+</details>"#;
+        assert!(pr_body_has_package("pkg-a", body));
+        assert!(!pr_body_has_package("pkg-b", body));
+    }
 
     #[test]
     fn parse_pr_body_happy_path() {

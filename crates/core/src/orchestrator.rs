@@ -20,7 +20,7 @@ use crate::{
     },
     orchestrator::{
         package_processor::{PackageProcessor, PrBranchResult},
-        pr_body::parse_pr_body,
+        pr_body::{parse_pr_body, pr_body_has_package},
     },
     packages::{
         releasable::ReleasablePackageGroups,
@@ -310,6 +310,15 @@ impl Orchestrator {
             if let Some(merged_pr) =
                 self.forge.get_merged_release_pr(req).await?
             {
+                if !pr_body_has_package(&package.name, &merged_pr.body) {
+                    log::info!(
+                        "{} is not in merged PR #{}: nothing to release",
+                        package.name,
+                        merged_pr.number
+                    );
+                    continue;
+                }
+
                 self.create_package_release(package, &merged_pr).await?;
 
                 if !released_prs.contains(&merged_pr.number) {
